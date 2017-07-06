@@ -13,4 +13,8 @@ defmodule IRC.User do
       :error -> :error
     end
   end
+
+  def has_full_cmd_access?(user) do
+    user.nick != "" && user.name != ""
+  end
 end

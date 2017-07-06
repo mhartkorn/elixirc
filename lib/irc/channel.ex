@@ -46,7 +46,13 @@ defmodule IRC.Channel do
   end
 
   def handle_call({:privmsg, message}, _from, channel) do
-    # TODO implement
+    for u <- channel.users do
+      case Server.UserRegistry.find_user_for_nick(UserRegistry, u.nick) do
+        {:ok, user} -> Server.UserRegistry.send_message(UserRegistry, user, message)
+        :error -> Logger.debug "User #{u.nick} not found despite being registered in channel #{channel.name}"
+      end
+     end
+    {:noreply, channel}
   end
 
   def handle_call({:set_flags, flags}, _form, channel) do
@@ -56,7 +62,7 @@ defmodule IRC.Channel do
 
   # Internal
 
-  def find_user(channel, nick) do
+  defp find_user(channel, nick) do
     case Enum.find_index(channel.users, fn u -> u.nick == nick end) do
       index -> %{channel | users: List.delete_at(channel.users, index)}
       _ ->

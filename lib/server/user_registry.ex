@@ -23,7 +23,11 @@ defmodule Server.UserRegistry do
   end
 
   def find_user_for_socket(server, ip_port) do
-    GenServer.call(server, {:lookup, ip_port})
+    GenServer.call(server, {:lookup_socket, ip_port})
+  end
+
+  def find_user_for_nick(server, nick) do
+    GenServer.call(server, {:lookup_nick, nick})
   end
 
   def delete_user(server, user) do
@@ -71,16 +75,27 @@ defmodule Server.UserRegistry do
     {:noreply, state}
   end
 
-  def handle_call({:lookup, ip_port}, _from, state) do
+  def handle_call({:lookup_socket, ip_port}, _from, state) do
     ip_port_str = Util.convertIpPortToString(ip_port)
     Logger.debug "Looking for user '#{ip_port_str}'"
     {:reply, Map.fetch(state, ip_port_str), state}
   end
 
-  def handle_call({:send_message, user, message}, _from, state) do
-    if IRC.User.has_nick?(user) do
-      Map.get(state, user.nick)
+  def handle_call({:lookup_nick, nick}, _from, state) do
+    user = Enum.find(state, fn x -> elem(x, 1).nick == nick end)
+    if user == nil do
+        Logger.debug "Found user #{nick}"
+        {:reply, {:ok, user}, state}
+    else
+        Logger.debug "Could not find user #{nick}"
+        {:reply, :error, state}
     end
+  end
+
+  def handle_call({:send_message, user, message}, _from, state) do
+    IRC.User
+
+    {:noreply, state}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, {names, refs}) do

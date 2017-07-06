@@ -15,11 +15,12 @@ defmodule Server.Command do
     command = String.downcase(Enum.at(lineSplits, beginning))
     {_, rest} = Enum.split(lineSplits, beginning + 1)
 
-    if has_full_cmd_access?(user) do
+    if IRC.User.has_full_cmd_access?(user) do
       case command do
         "pong" -> cmd_pong(socket, user, rest)
         "privmsg" -> cmd_privmsg(socket, user, rest)
         "join" -> cmd_join(socket, user, rest)
+        "part" -> cmd_part(socket, user, rest)
         "quit" -> cmd_quit(socket, user, rest)
         "nick" -> cmd_quit(socket, user, rest)
         _ -> {:error, :unknown_command, String.upcase(command)}
@@ -35,10 +36,6 @@ defmodule Server.Command do
     end
   end
 
-  def has_full_cmd_access?(user) do
-    user.nick != "" && user.name != ""
-  end
-
   def get_source(socket) do
     case :inet.peername(socket) do
       {:ok, ip_port} -> ip_port
@@ -47,8 +44,22 @@ defmodule Server.Command do
   end
 
   defp cmd_privmsg(_socket, user, linesplits) do
+    # Missing validity checks
     Logger.debug "Got 'PRIVMSG #{Enum.join(linesplits, " ")}' from '#{user.nick}'"
-    {:ok, "PRIVMSG", user}
+
+    if length(linesplits) < 1 do
+      {:error, "PRIVMSG", user}
+    else
+      case Server.ChannelRegistry.find_channel(ChannelRegistry, Enum.at(linesplits, 0)) do
+        {:ok, channel} ->
+          message = Enum.chunk(linesplits, 1, length(linesplits)) |> Enum.join(" ")
+          IRC.Channel.privmsg(elem(channel, 1), message)
+          {:ok, "PRIVMSG", user}
+        _ ->
+          Logger.error "No such channel..."
+          {:error, "PRIVMSG", user}
+      end
+    end
   end
 
   defp cmd_join(_socket, user, linesplits) do
@@ -78,6 +89,12 @@ defmodule Server.Command do
     end
 
     {:ok, "JOIN", user}
+  end
+
+  def cmd_part(_socket, user, linesplits) do
+    Logger.debug "Got PART '#{Enum.join(linesplits, " ")}' from '#{user.nick}'"
+
+
   end
 
   def nick_valid?(nick) do
@@ -113,8 +130,8 @@ defmodule Server.Command do
     {:ok, "USER", user}
   end
 
-  defp cmd_pong(_socket, _user, _linesplits) do
-
+  defp cmd_pong(_socket, user, _linesplits) do
+    {:ok, "PONG", user}
   end
 
   defp cmd_quit(socket, user, _linesplits) do
